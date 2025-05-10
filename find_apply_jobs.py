@@ -133,7 +133,7 @@ async def main():
     ground_task = (
         "你是一个专业的求职助手。你的任务是帮助我找工作。以下是你的指导原则："
         "1. 仔细阅读我的简历，了解我的背景和技能。"
-        "2. 在LinkedIn等平台上搜索匹配的工作机会。search at company in America :"
+        "2. 在LinkedIn等平台上搜索匹配的工作机会。开始第一步是先刷新网页,在输入框中输入 AI agent ,然后点击搜索按钮，search at company in America :"
         "3. 对于每个工作机会，评估它是否与我的技能和职业发展目标相符。"
         "4. 准备并提交求职申请，确保简历和申请表格填写准确。"
         "5. 记录已申请的工作，避免重复申请。"
@@ -200,22 +200,29 @@ async def main():
         model="gemini-2.5-pro-preview-03-25", api_key=SecretStr(token)
     )
 
-    agents = []
-    for task in tasks:
-        agent = Agent(
-            task=task,
-            llm=model,
-            planner_llm=planner_llm,
-            use_vision_for_planner=True,
-            planner_interval=4,
-            controller=controller,
-            browser=browser,
-            max_failures=10,
-            use_vision=True,
-        )
-        agents.append(agent)
+    # 这里增加一个判断 ，保证成功执行100次，每次执行后，判断是否成功，如果失败就重新开始
+    success = False
+    count = 0
+    while not success and count < 100:
+        try:
+            agent = Agent(
+                task=tasks[0],
+                llm=model,
+                planner_llm=planner_llm,
+                use_vision_for_planner=True,
+                planner_interval=4,
+                controller=controller,
+                browser=browser,
+                max_failures=10,
+                use_vision=True,
+            )
 
-    await asyncio.gather(*[agent.run(max_steps=100) for agent in agents])
+            await agent.run(max_steps=100)
+            success = True
+            count += 1
+        except Exception as e:
+            logger.error(f"Agent failed with error: {e}")
+            success = False
 
 
 if __name__ == "__main__":
