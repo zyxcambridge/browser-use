@@ -29,7 +29,7 @@ from browser_use.browser.context import BrowserContext
 
 from lmnr import Laminar
 
-_project_api_key_b64 = "NTJxM0J5WDZVbWhiYjhFTTltRDF2Z1l5aE1RTlZzMVRySG5Xc3d2Wk1OZ01XRkprV3RmYzlPOFJkSlI3U0dQZQ=="
+_project_api_key_b64 = "QTAwRnBDUkZDemRkVXRTSlVLdEdEa3h1ZkxRM0J3QWd3RDhFUzNlU0Y3Q1k5cmIxRXgzRnh0V0paODJvOVcyag=="
 project_api_key = base64.b64decode(_project_api_key_b64).decode("utf-8")
 print(project_api_key)
 Laminar.initialize(project_api_key=project_api_key)
@@ -82,31 +82,38 @@ def read_cv():
 )
 async def upload_cv(index: int, browser: BrowserContext):
     path = str(CV.absolute())
-    dom_el = await browser.get_dom_element_by_index(index)
 
-    if dom_el is None:
-        return ActionResult(error=f"No element found at index {index}")
+    # Use existing file upload controller action
+    return await controller.execute_action(
+        "upload_file", {"index": index, "file_path": path}
+    )
 
-    file_upload_dom_el = dom_el.get_file_upload_element()
 
-    if file_upload_dom_el is None:
-        logger.info(f"No file upload element found at index {index}")
-        return ActionResult(error=f"No file upload element found at index {index}")
+@controller.action(
+    "Upload profile picture to element",
+)
+async def upload_profile_picture(index: int, browser: BrowserContext):
+    # Use specific image file in current directory
+    path = os.path.join(os.getcwd(), "zhangyixin-touxiang.png")
 
-    file_upload_el = await browser.get_locate_element(file_upload_dom_el)
+    # Validate file exists
+    if not os.path.exists(path):
+        return ActionResult(error=f"Image file not found: {path}", is_done=True)
 
-    if file_upload_el is None:
-        logger.info(f"No file upload element found at index {index}")
-        return ActionResult(error=f"No file upload element found at index {index}")
+    # Validate image file type
+    valid_extensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]
+    _, ext = os.path.splitext(path.lower())
 
-    try:
-        await file_upload_el.set_input_files(path)
-        msg = f'Successfully uploaded file "{path}" to index {index}'
-        logger.info(msg)
-        return ActionResult(extracted_content=msg)
-    except Exception as e:
-        logger.debug(f"Error in set_input_files: {str(e)}")
-        return ActionResult(error=f"Failed to upload file to index {index}")
+    if ext not in valid_extensions:
+        return ActionResult(
+            error=f"Invalid image file extension: {ext}. Must be one of {valid_extensions}",
+            is_done=True,
+        )
+
+    # Use existing file upload controller action
+    return await controller.execute_action(
+        "upload_file", {"index": index, "file_path": path}
+    )
 
 
 browser = Browser(
@@ -121,20 +128,21 @@ async def main():
     # ground_task = (
     #   'You are a professional job finder. '
     #   '1. Read my cv with read_cv'
-    #   '2. Read the saved jobs file '
-    #   '3. start applying to the first link of Amazon '
-    #   'You can navigate through pages e.g. by scrolling '
-    #   'Make sure to be on the english version of the page'
+    #   '2. Find jobs that match my profile'
     # )
     ground_task = (
-        "You are a professional job finder. "
-        "Read my CV & find AI agent jobs, save them to a file, and then start applying for them in new tabs, if you need help, ask me."
-        # "search at company in America :"
-        "search at company in china :"
+        "你是一个专业的求职助手。你的任务是帮助我找工作。以下是你的指导原则："
+        "1. 仔细阅读我的简历，了解我的背景和技能。"
+        "2. 在LinkedIn等平台上搜索匹配的工作机会。search at company in America :"
+        "3. 对于每个工作机会，评估它是否与我的技能和职业发展目标相符。"
+        "4. 准备并提交求职申请，确保简历和申请表格填写准确。"
+        "5. 记录已申请的工作，避免重复申请。"
+        "6. 如果遇到任何障碍，灵活调整策略。"
+        "7. 目标是申请100个合适的工作岗位。"
     )
     account_profile = (
         "if some website need login,first login in with google : "
-        # "second use link in page https://www.linkedin.com/in/yixin-zhang-192422ab/"
+        "second use link in page https://www.linkedin.com/in/yixin-zhang-192422ab/"
         "zyxchzhang@gmail.com"
         "yixin zhang ,china shanghai" + "\n"
     )
@@ -143,23 +151,25 @@ async def main():
         + "\n"
     )
 
-    # action = (
-    #     "增加判断是否陷入了死循环,跳过已经申请的公司,判断一下已经申请了,就跳过,如果已经申请了,就跳过,点击申请相关按钮后,发现100%的进度,说明已经申请了,就跳过 ,记得刷新网页,记录下这个公司的名字,然后跳过: "
-    #     "寻找在网页 上有 【快速申请】的按钮,直接点击【快速申请】,信息直接用已经有的信息,如果没有,使用简历中的信息 : "
-    #     "出现查看您的申请,或者进度出现100%,还差一步,记得滑动页面到最下面,找到提交申请按钮,点击【提交申请】,如果没有,则回去重新找 :   "
-    #     "如果点击申请需要跳转到另外的页面,跳转到公司官网,则点击收藏,暂时放弃,寻找下一个公司,点击【快速申请】,"
-    #     "投递100个公司,才可以停止,如果投递次数少于100次,则回到主页面,重新开始寻找公司,直到找到100个公司为止 :  "
-    #     "如果投递次数大于100次,则停止寻找加拿大州岗位,开始投递 : " + "\n"
-    # )
     action = (
-        "增加判断是否陷入了死循环,跳过已经申请的公司,判断一下是否已经沟通了,就跳过,记得刷新网页,记录下这个公司的名字,然后跳过: "
-        "每次开始,都重新搜索,jd中要有 ai agent,没有则跳过,选择下一个公司,开始聊天 "
-        + "\n"
-        "寻找在网页 上有 【立即沟通】的按钮,直接点击【立即沟通】,信息直接用已经有的信息,如果没有,使用打招呼的信息 : "
-        + "\n"
+        "增加判断是否陷入了死循环,跳过已经申请的公司,判断一下已经申请了,就跳过,如果已经申请了,就跳过,点击申请相关按钮后,发现100%的进度,说明已经申请了,就跳过 ,记得刷新网页,记录下这个公司的名字,然后跳过: "
+        "寻找在网页 上有 【快速申请】的按钮,直接点击【快速申请】,信息直接用已经有的信息,如果没有,使用简历中的信息 : "
+        "出现查看您的申请,或者进度出现100%,还差一步,记得滑动页面到最下面,找到提交申请按钮,点击【提交申请】,如果没有,则回去重新找 :   "
+        "如果点击申请需要跳转到另外的页面,跳转到公司官网,则点击收藏,暂时放弃,寻找下一个公司,点击【快速申请】,"
         "投递100个公司,才可以停止,如果投递次数少于100次,则回到主页面,重新开始寻找公司,直到找到100个公司为止 :  "
+        "如果投递次数大于100次,则停止寻找加拿大州岗位,开始投递 : " + "\n"
+        "不要让程序停止，如果任务没有完成就 ，重新在执行一次， 第二次 再次运行任务时，重新打开网页，重新输入，不从之前的断点执行 : "
         + "\n"
     )
+    # action = (
+    #     "增加判断是否陷入了死循环,跳过已经申请的公司,判断一下是否已经沟通了,就跳过,记得刷新网页,记录下这个公司的名字,然后跳过: "
+    #     "每次开始,都重新搜索,jd中要有 ai agent,没有则跳过,选择下一个公司,开始聊天 "
+    #     + "\n"
+    #     "寻找在网页 上有 【立即沟通】的按钮,直接点击【立即沟通】,信息直接用已经有的信息,如果没有,使用打招呼的信息 : "
+    #     + "\n"
+    #     "投递100个公司,才可以停止,如果投递次数少于100次,则回到主页面,重新开始寻找公司,直到找到100个公司为止 :  "
+    #     + "\n"
+    # )
     ground_task = ground_task + memory + account_profile + action
     tasks = [
         # ground_task + "\n" + "Google",
@@ -172,8 +182,8 @@ async def main():
         # ground_task + "\n" + "Tiktok",
         # ground_task + "\n" + "Facebook",
         # ground_task + "\n" + "Twitter",
-        # ground_task + "\n" + "LinkedIn",
-        ground_task + "\n" + "boss直聘",
+        ground_task + "\n" + "LinkedIn",
+        # ground_task + "\n" + "boss直聘",
         # ground_task + "\n" + "猎聘",
         # ground_task + "\n" + "Uber",
         # ground_task + "\n" + "Airbnb",
