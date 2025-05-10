@@ -143,8 +143,9 @@ async def main():
     account_profile = (
         "if some website need login,first login in with google : "
         "second use link in page https://www.linkedin.com/in/yixin-zhang-192422ab/"
-        "zyxchzhang@gmail.com"
-        "yixin zhang ,china shanghai" + "\n"
+        "zyxcambridge@gmail.com"
+        "yixin zhang "
+        "location:china shanghai" + "\n"
     )
     memory = (
         "把公司的jd 的主要内容和要求,以及jd的链接都复制下来,保存,然后自己用中文翻译一遍 : "
