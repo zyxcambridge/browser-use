@@ -57,21 +57,24 @@ class Job(BaseModel):
 )
 def save_jobs(job: Job):
     from datetime import datetime
+
     if job.applied and not job.application_date:
         job.application_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     with open("jobs.csv", "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            job.title, 
-            job.company, 
-            job.link, 
-            job.salary, 
-            job.location,
-            job.applied,
-            job.application_date
-        ])
-    
+        writer.writerow(
+            [
+                job.title,
+                job.company,
+                job.link,
+                job.salary,
+                job.location,
+                job.applied,
+                job.application_date,
+            ]
+        )
+
     return "Saved job to file"
 
 
@@ -129,13 +132,37 @@ async def upload_profile_picture(index: int, browser: BrowserContext):
         "upload_file", {"index": index, "file_path": path}
     )
 
+    # browser = Browser(
+    #     config=BrowserConfig(
+    #         browser_binary_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    #         disable_security=True,
+    #     )
+    # )
 
-browser = Browser(
-    config=BrowserConfig(
-        browser_binary_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        disable_security=True,
-    )
+
+# config = BrowserConfig(
+#     browser_binary_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+#     disable_security=False,
+# )
+
+# config = BrowserConfig(
+#     # Specify the path to your Chrome executable
+#     browser_binary_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",  # macOS path
+#     # For Windows, typically: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+#     # For Linux, typically: '/usr/bin/google-chrome'
+# )
+
+# "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+#  --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
+# --no-first-run --no-default-browser-check
+# Configure browser to connect to local Chrome instance in debug mode
+config = BrowserConfig(
+    cdp_url="http://localhost:9222",  # Connect to Chrome DevTools Protocol
+    disable_security=True,  # Allow automation features
 )
+
+# Create browser instance with CDP configuration
+browser = Browser(config=config)
 
 
 def get_job_stats():
@@ -143,22 +170,25 @@ def get_job_stats():
         with open("jobs.csv", "r") as f:
             reader = csv.reader(f)
             jobs = list(reader)
-            applied = sum(1 for row in jobs if len(row) >= 6 and row[5].lower() == 'true')
+            applied = sum(
+                1 for row in jobs if len(row) >= 6 and row[5].lower() == "true"
+            )
             total = len(jobs)
             return {
-                'applied': applied,
-                'total': total,
-                'remaining': 100 - applied,
-                'success_rate': (applied / total * 100) if total > 0 else 0
+                "applied": applied,
+                "total": total,
+                "remaining": 100 - applied,
+                "success_rate": (applied / total * 100) if total > 0 else 0,
             }
     except FileNotFoundError:
-        return {'applied': 0, 'total': 0, 'remaining': 100, 'success_rate': 0}
+        return {"applied": 0, "total": 0, "remaining": 100, "success_rate": 0}
+
 
 async def main():
     # Initialize or get current progress
     stats = get_job_stats()
-    applied_count = stats['applied']
-    
+    applied_count = stats["applied"]
+
     # ground_task = (
     #   'You are a professional job finder. '
     #   '1. Read my cv with read_cv'
@@ -196,6 +226,7 @@ async def main():
         "不要让程序停止，如果任务没有完成就 ，重新在执行一次， 第二次 再次运行任务时，重新打开网页，重新输入，不从之前的断点执行 : "
         + "\n"
     )
+
     # Track previous agent state and reflection
     class AgentState:
         def __init__(self):
@@ -257,7 +288,7 @@ async def main():
     max_retries = 3
     retry_delay = 60  # seconds
     stats = get_job_stats()
-    applied_count = stats['applied']
+    applied_count = stats["applied"]
 
     while applied_count < 100:
         for task in tasks:
@@ -266,7 +297,7 @@ async def main():
                 try:
                     # Update task with current progress and stats
                     stats = get_job_stats()
-                    applied_count = stats['applied']
+                    applied_count = stats["applied"]
                     progress_info = (
                         f"当前进度：已申请 {stats['applied']}/100 个职位\n"
                         f"总浏览职位数：{stats['total']}\n"
@@ -274,7 +305,7 @@ async def main():
                         f"剩余申请数：{stats['remaining']}\n"
                     )
                     task_with_progress = f"{task}\n{progress_info}"
-                    
+
                     # Add reflection if there were previous failures
                     task_with_reflection = task_with_progress
                     if agent_state.last_error:
@@ -286,7 +317,9 @@ async def main():
                             f"上次执行动作: {agent_state.last_action}\n"
                             "---反思和调整---\n"
                         )
-                        task_with_reflection = f"{task_with_progress}\n{reflection}\n{reflection_info}"
+                        task_with_reflection = (
+                            f"{task_with_progress}\n{reflection}\n{reflection_info}"
+                        )
 
                     agent = Agent(
                         task=task_with_reflection,
@@ -302,41 +335,43 @@ async def main():
 
                     # Store current state before running
                     agent_state.last_task = task
-                    agent_state.last_action = None  # Will be updated by agent during execution
+                    agent_state.last_action = (
+                        None  # Will be updated by agent during execution
+                    )
 
                     await agent.run(max_steps=100)
                     # Update stats after successful run
                     stats = get_job_stats()
-                    applied_count = stats['applied']
+                    applied_count = stats["applied"]
                     logger.info(f"Progress update: {progress_info}")
-                    
+
                     # Reset state on success
                     agent_state.last_error = None
                     agent_state.consecutive_failures = 0
                     break  # Success, move to next task
-                    
+
                 except Exception as e:
                     retry_count += 1
                     agent_state.consecutive_failures += 1
                     agent_state.last_error = str(e)
-                    
+
                     # Try to get current URL if possible
                     try:
                         agent_state.last_page_url = browser.current_url
                     except:
                         agent_state.last_page_url = "Unknown"
-                    
+
                     logger.error(
                         f"Agent failed with error: {e}. "
                         f"Attempt {retry_count}/{max_retries}. "
                         f"Consecutive failures: {agent_state.consecutive_failures}"
                     )
-                    
+
                     if retry_count < max_retries:
                         logger.info(f"Waiting {retry_delay} seconds before retry...")
                         await asyncio.sleep(retry_delay)
                         retry_delay *= 2  # Exponential backoff
-                        
+
                         # If we've failed multiple times, try refreshing the page
                         if agent_state.consecutive_failures >= 2:
                             try:
@@ -350,7 +385,7 @@ async def main():
                             f"Total consecutive failures: {agent_state.consecutive_failures}. "
                             f"Moving to next task."
                         )
-    
+
     final_stats = get_job_stats()
     logger.info(
         f"Job application process completed!\n"
