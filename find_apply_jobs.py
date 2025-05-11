@@ -48,16 +48,30 @@ class Job(BaseModel):
     fit_score: float
     location: str | None = None
     salary: str | None = None
+    applied: bool = False
+    application_date: str | None = None
 
 
 @controller.action(
     "Save jobs to file - with a score how well it fits to my profile", param_model=Job
 )
 def save_jobs(job: Job):
+    from datetime import datetime
+    if job.applied and not job.application_date:
+        job.application_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
     with open("jobs.csv", "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([job.title, job.company, job.link, job.salary, job.location])
-
+        writer.writerow([
+            job.title, 
+            job.company, 
+            job.link, 
+            job.salary, 
+            job.location,
+            job.applied,
+            job.application_date
+        ])
+    
     return "Saved job to file"
 
 
@@ -124,7 +138,27 @@ browser = Browser(
 )
 
 
+def get_job_stats():
+    try:
+        with open("jobs.csv", "r") as f:
+            reader = csv.reader(f)
+            jobs = list(reader)
+            applied = sum(1 for row in jobs if len(row) >= 6 and row[5].lower() == 'true')
+            total = len(jobs)
+            return {
+                'applied': applied,
+                'total': total,
+                'remaining': 100 - applied,
+                'success_rate': (applied / total * 100) if total > 0 else 0
+            }
+    except FileNotFoundError:
+        return {'applied': 0, 'total': 0, 'remaining': 100, 'success_rate': 0}
+
 async def main():
+    # Initialize or get current progress
+    stats = get_job_stats()
+    applied_count = stats['applied']
+    
     # ground_task = (
     #   'You are a professional job finder. '
     #   '1. Read my cv with read_cv'
@@ -162,6 +196,25 @@ async def main():
         "不要让程序停止，如果任务没有完成就 ，重新在执行一次， 第二次 再次运行任务时，重新打开网页，重新输入，不从之前的断点执行 : "
         + "\n"
     )
+    # Track previous agent state and reflection
+    class AgentState:
+        def __init__(self):
+            self.last_task = None
+            self.last_error = None
+            self.consecutive_failures = 0
+            self.last_page_url = None
+            self.last_action = None
+
+    agent_state = AgentState()
+
+    reflection = (
+        "如果失败了，就重新开始，重新打开网页，重新输入，不从之前的断点执行。\n"
+        "根据上一次失败的原因，调整策略：\n"
+        "1. 如果是CV上传失败，尝试跳过CV上传步骤\n"
+        "2. 如果是页面加载问题，等待更长时间\n"
+        "3. 如果是表单填写问题，重新尝试\n"
+        "4. 如果连续失败3次，切换到下一个职位\n"
+    )
     # action = (
     #     "增加判断是否陷入了死循环,跳过已经申请的公司,判断一下是否已经沟通了,就跳过,记得刷新网页,记录下这个公司的名字,然后跳过: "
     #     "每次开始,都重新搜索,jd中要有 ai agent,没有则跳过,选择下一个公司,开始聊天 "
@@ -171,7 +224,7 @@ async def main():
     #     "投递100个公司,才可以停止,如果投递次数少于100次,则回到主页面,重新开始寻找公司,直到找到100个公司为止 :  "
     #     + "\n"
     # )
-    ground_task = ground_task + memory + account_profile + action
+    ground_task = ground_task + memory + account_profile + action + reflection
     tasks = [
         # ground_task + "\n" + "Google",
         # ground_task + "\n" + "Amazon",
@@ -201,29 +254,110 @@ async def main():
         model="gemini-2.5-pro-preview-03-25", api_key=SecretStr(token)
     )
 
-    # 这里增加一个判断 ，保证成功执行100次，每次执行后，判断是否成功，如果失败就重新开始
-    success = False
-    count = 0
-    while not success and count < 100:
-        try:
-            agent = Agent(
-                task=tasks[0],
-                llm=model,
-                planner_llm=planner_llm,
-                use_vision_for_planner=True,
-                planner_interval=4,
-                controller=controller,
-                browser=browser,
-                max_failures=10,
-                use_vision=True,
-            )
+    max_retries = 3
+    retry_delay = 60  # seconds
+    stats = get_job_stats()
+    applied_count = stats['applied']
 
-            await agent.run(max_steps=100)
-            success = True
-            count += 1
-        except Exception as e:
-            logger.error(f"Agent failed with error: {e}")
-            success = False
+    while applied_count < 100:
+        for task in tasks:
+            retry_count = 0
+            while retry_count < max_retries and applied_count < 100:
+                try:
+                    # Update task with current progress and stats
+                    stats = get_job_stats()
+                    applied_count = stats['applied']
+                    progress_info = (
+                        f"当前进度：已申请 {stats['applied']}/100 个职位\n"
+                        f"总浏览职位数：{stats['total']}\n"
+                        f"申请成功率：{stats['success_rate']:.1f}%\n"
+                        f"剩余申请数：{stats['remaining']}\n"
+                    )
+                    task_with_progress = f"{task}\n{progress_info}"
+                    
+                    # Add reflection if there were previous failures
+                    task_with_reflection = task_with_progress
+                    if agent_state.last_error:
+                        reflection_info = (
+                            f"上次失败原因: {agent_state.last_error}\n"
+                            f"上次执行任务: {agent_state.last_task}\n"
+                            f"连续失败次数: {agent_state.consecutive_failures}\n"
+                            f"上次页面URL: {agent_state.last_page_url}\n"
+                            f"上次执行动作: {agent_state.last_action}\n"
+                            "---反思和调整---\n"
+                        )
+                        task_with_reflection = f"{task_with_progress}\n{reflection}\n{reflection_info}"
+
+                    agent = Agent(
+                        task=task_with_reflection,
+                        llm=model,
+                        planner_llm=planner_llm,
+                        use_vision_for_planner=True,
+                        planner_interval=4,
+                        controller=controller,
+                        browser=browser,
+                        max_failures=10,
+                        use_vision=True,
+                    )
+
+                    # Store current state before running
+                    agent_state.last_task = task
+                    agent_state.last_action = None  # Will be updated by agent during execution
+
+                    await agent.run(max_steps=100)
+                    # Update stats after successful run
+                    stats = get_job_stats()
+                    applied_count = stats['applied']
+                    logger.info(f"Progress update: {progress_info}")
+                    
+                    # Reset state on success
+                    agent_state.last_error = None
+                    agent_state.consecutive_failures = 0
+                    break  # Success, move to next task
+                    
+                except Exception as e:
+                    retry_count += 1
+                    agent_state.consecutive_failures += 1
+                    agent_state.last_error = str(e)
+                    
+                    # Try to get current URL if possible
+                    try:
+                        agent_state.last_page_url = browser.current_url
+                    except:
+                        agent_state.last_page_url = "Unknown"
+                    
+                    logger.error(
+                        f"Agent failed with error: {e}. "
+                        f"Attempt {retry_count}/{max_retries}. "
+                        f"Consecutive failures: {agent_state.consecutive_failures}"
+                    )
+                    
+                    if retry_count < max_retries:
+                        logger.info(f"Waiting {retry_delay} seconds before retry...")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        
+                        # If we've failed multiple times, try refreshing the page
+                        if agent_state.consecutive_failures >= 2:
+                            try:
+                                await browser.refresh()
+                                logger.info("Refreshed page after multiple failures")
+                            except Exception as refresh_error:
+                                logger.error(f"Failed to refresh page: {refresh_error}")
+                    else:
+                        logger.error(
+                            f"Max retries reached for task. "
+                            f"Total consecutive failures: {agent_state.consecutive_failures}. "
+                            f"Moving to next task."
+                        )
+    
+    final_stats = get_job_stats()
+    logger.info(
+        f"Job application process completed!\n"
+        f"Total jobs applied: {final_stats['applied']}\n"
+        f"Total jobs viewed: {final_stats['total']}\n"
+        f"Success rate: {final_stats['success_rate']:.1f}%"
+    )
 
 
 if __name__ == "__main__":
