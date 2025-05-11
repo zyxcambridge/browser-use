@@ -152,7 +152,7 @@ async def upload_profile_picture(index: int, browser: BrowserContext):
 #     # For Linux, typically: '/usr/bin/google-chrome'
 # )
 
-# "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222  --user-data-dir=/Users/yixin0909zhang/chrome-debug --no-first-run --no-default-browser-check
 #  --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
 # --no-first-run --no-default-browser-check
 # Configure browser to connect to local Chrome instance in debug mode
