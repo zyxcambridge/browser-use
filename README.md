@@ -13,6 +13,8 @@ pip install dist/browser_use-0.1.45-py3-none-any.whl
 
 python find_apply_jobs.py
 
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222  --user-data-dir=/Users/yixin0909zhang/chrome-debug --no-first-run --no-default-browser-check
+
 ```
 
 ## Roadmap

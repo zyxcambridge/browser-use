@@ -218,7 +218,6 @@ async def main():
     history.extracted_content()  # Content extracted during execution
     history.errors()  # Any errors that occurred
     history.model_actions()  # All actions with their parameters
-    history.log()  # All logs
 
 
 if __name__ == "__main__":
