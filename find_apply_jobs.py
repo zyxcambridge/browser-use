@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from browser_use.agent.memory.views import MemoryConfig
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -162,6 +163,7 @@ async def main():
         "不要让程序停止，如果任务没有完成就 ，重新在执行一次， 第二次 再次运行任务时，重新打开网页，重新输入，不从之前的断点执行 : "
         "遇到由于页面变更和元素识别问题，则放弃这个页面，点击关闭按钮，回到主页面开始第一步是先刷新网页,在输入框中输入 AI agent ,然后点击搜索按钮，search at company in America。"
         "由于LinkedIn页面的动态特性，该过程速度缓慢且容易出错等问题时"
+        "当一个公司申请完成，出现完成按钮时，点击完成按钮，"
         "回到主页面开始第一步是先刷新网页,在输入框中输入 AI agent ,然后点击搜索按钮，search at company in America。"
         "\n"
     )
@@ -203,6 +205,7 @@ async def main():
 
     agent = Agent(
         task=ground_task,
+        message_context="目标是申请100个合适的工作岗位,Action  take_step 出现 Unfinished 时，重新打开linkedin 首页，重新输入AI agent 搜索，不从之前的断点执行",
         llm=model,
         planner_llm=planner_llm,
         use_vision_for_planner=True,
@@ -211,6 +214,7 @@ async def main():
         browser=browser,
         max_failures=10,
         use_vision=True,
+        save_conversation_path="logs/find_apply_jobs",
     )
 
     history = await agent.run(max_steps=100)
