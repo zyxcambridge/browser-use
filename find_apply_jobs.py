@@ -146,6 +146,7 @@ async def main():
         "second use link in page https://www.linkedin.com/in/yixin-zhang-192422ab/"
         "zyxcambridge@gmail.com"
         "yixin zhang "
+        "18810901685"
         "location:china shanghai" + "\n"
     )
     memory = (
@@ -197,7 +198,7 @@ async def main():
     token = base64.b64decode(_token_b64).decode("utf-8")
     endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/"
     model = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp", api_key=SecretStr(token)
+        model="gemini-2.5-pro-preview-03-25", api_key=SecretStr(token)
     )
     planner_llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-pro-preview-03-25", api_key=SecretStr(token)
@@ -205,7 +206,7 @@ async def main():
 
     agent = Agent(
         task=ground_task,
-        message_context="目标是申请100个合适的工作岗位,Action  take_step 出现 Unfinished 时，重新打开linkedin 首页，重新输入AI agent 搜索，不从之前的断点执行",
+        message_context="目标是申请100个合适的工作岗位,Task completed 之前判断是否完成了100个岗位申请，如果未完成，Action  take_step 出现 Unfinished 时，或者 the agent reached the last step and needs to stop 重新打开linkedin 首页，重新输入AI agent 搜索，不从之前的断点执行",
         llm=model,
         planner_llm=planner_llm,
         use_vision_for_planner=True,
