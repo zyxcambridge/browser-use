@@ -18,6 +18,19 @@ from pathlib import Path
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from browser_use.agent.memory.views import MemoryConfig
+from browser_use.agent.views import (
+    REQUIRED_LLM_API_ENV_VARS,
+    ActionResult,
+    AgentError,
+    AgentHistory,
+    AgentHistoryList,
+    AgentOutput,
+    AgentSettings,
+    AgentState,
+    AgentStepInfo,
+    StepMetadata,
+    ToolCallingMethod,
+)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -348,6 +361,14 @@ async def main():
             # 如果agent完成任务，等待一段时间后继续
             await asyncio.sleep(5)
             logger.info("等待5秒后继续下一轮...")
+
+            # 重置浏览器状态，创建新的上下文
+            await browser.new_context()
+
+            # 重置任务描述和消息上下文
+            agent.task = ground_task  # 重置任务描述
+            agent.settings.message_context = message_context  # 重置消息上下文
+            agent.browser = browser
 
             # 重置agent状态，准备下一轮
             agent.state.n_steps = 1
