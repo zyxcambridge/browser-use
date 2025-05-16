@@ -220,7 +220,7 @@ async def upload_profile_picture(index: int, browser: BrowserContext):
     )
 
 
-browser = Browser(
+browsera = Browser(
     config=BrowserConfig(
         browser_binary_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         disable_security=True,
@@ -316,12 +316,12 @@ async def main():
     token = base64.b64decode(_token_b64).decode("utf-8")
     endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-    # 初始化模型
+    # 初始化模型 gemini-2.5-pro-preview-05-06
     model = ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro-preview-03-25", api_key=SecretStr(token)
+        model="gemini-2.5-pro-preview-05-06", api_key=SecretStr(token)
     )
     planner_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro-preview-03-25", api_key=SecretStr(token)
+        model="gemini-2.5-pro-preview-05-06", api_key=SecretStr(token)
     )
 
     # 创建增强的消息上下文
@@ -343,7 +343,7 @@ async def main():
         use_vision_for_planner=True,
         planner_interval=4,
         controller=controller,
-        browser=browser,
+        browser=browsera,
         max_failures=15,  # 增加容错次数
         use_vision=True,
         save_conversation_path="logs/find_apply_jobs",
@@ -363,7 +363,14 @@ async def main():
             logger.info("等待5秒后继续下一轮...")
 
             # 重置浏览器状态，创建新的上下文
-            await browser.new_context()
+            # await browser.new_context()
+            await browsera.close()
+            browser = Browser(
+                config=BrowserConfig(
+                    browser_binary_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                    disable_security=True,
+                )
+            )
 
             # 重置任务描述和消息上下文
             agent.task = ground_task  # 重置任务描述
